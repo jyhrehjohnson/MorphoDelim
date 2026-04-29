@@ -1,7 +1,7 @@
 ---
 title: "MorphoDelim"
 author: "Jyhreh Johnson"
-date: "2026-03-06"
+date: "2026-04-29"
 output: html_document
 ---
 
@@ -18,9 +18,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 #For dissertation what are realistic parameters; what is the level of variance for this trait; rate of evolution; phenotypic traits in humans
 
-# Prospectus: Need a framework, phylogeny, clear list of parameters I can control starting values for means, rate of evolution, number of generation (duration), number of taxa, number of traits, number of character states each discrete trait can take on, quantity of pop that express each trait, variance in each trait independently 
+#Prospectus: Need a framework, phylogeny, clear list of parameters I can control starting values for means, rate of evolution, number of generation (duration), number of taxa, number of traits, number of character states each discrete trait can take on, quantity of pop that express each trait, variance in each trait independently 
 
-# Analytical part: Simulations create blinded data set; preserve true taxa, analyze them as if I don't know; figure out which methods work; just do categorical continuous traits; 
+#Analytical part: Simulations create blinded data set; preserve true taxa, analyze them as if I don't know; figure out which methods work; just do categorical continuous traits; 
 ```
 
 ```{r}
