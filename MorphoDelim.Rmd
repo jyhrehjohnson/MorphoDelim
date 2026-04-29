@@ -9,6 +9,8 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+#MorphoDelim is a morphology-based approach to species delimitation via simulation
+
 ```{r}
 # NOTES 
 #Change parameters as you go and then combine parameter to see how they interact with each other 
