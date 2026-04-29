@@ -34,9 +34,9 @@ library(dplyr)
 library(tidyr)
 library(patchwork)
 library(RColorBrewer)
-library(caret)         # Unified supervised classification framework
-library(randomForest)  # Random forest classifier
-library(e1071)         # SVM and naive bayes
+library(caret)         #Unified supervised classification framework
+library(randomForest)  #Random forest classifier
+library(e1071)         #SVM and naive bayes
 ```
 
 
