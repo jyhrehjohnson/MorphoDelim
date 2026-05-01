@@ -151,6 +151,77 @@ print(discrete_2)
 ```
 
 
+# Empirical Calibration
+
+```{r empirical-calibration}
+# =============================================================================
+# EMPIRICAL CALIBRATION — Extant Ape Variance Models
+# =============================================================================
+# Within-species SDs for the two simulated continuous traits are anchored to
+# published coefficients of variation (CVs) from extant African apes. Three
+# species define a low–medium–high variance gradient spanning the plausible
+# range for Pliocene hominin assemblages:
+#
+#   Pan paniscus    — low dimorphism, low within-species variance  [LOW tier]
+#   Pan troglodytes — moderate dimorphism, central estimate        [MED tier]
+#   Gorilla gorilla — high dimorphism, high within-species variance [HIGH tier]
+#
+# Trait means used to convert CV -> SD:
+#   Cranial breadth (palate width proxy): ~130 mm
+#   M1 mesiodistal length:                ~ 14 mm
+#
+# *** CV values below are approximate; replace with exact figures from the
+#     CV/SD columns of each paper's descriptive statistics table. ***
+#
+# Primary sources:
+#   Ackermann RR (2002) Patterns of covariation in the hominoid craniofacial
+#     skeleton. J Hum Evol 42:167-187.                  [cranial, Pan/Gorilla]
+#   Albrecht GH, Gelvin BR, Miller JMA (2003) The hierarchy of intraspecific
+#     craniometric variation in gorillas. In: Gorilla Biology, pp. 62-103.
+#                                                        [cranial, Gorilla]
+#   Plavcan JM, Cope DA (2001) Metric variation and species recognition in
+#     the fossil record. Evol Anthropol 10:204-222.      [dental, catarrhines]
+
+calib <- data.frame(
+  Tier       = c("Low",  "Low",
+                 "Med",  "Med",
+                 "High", "High"),
+  Species    = c("Pan paniscus",    "Pan paniscus",
+                 "Pan troglodytes", "Pan troglodytes",
+                 "Gorilla gorilla", "Gorilla gorilla"),
+  Trait      = c("Cranial breadth", "M1 MD length",
+                 "Cranial breadth", "M1 MD length",
+                 "Cranial breadth", "M1 MD length"),
+  Sex        = c("Pooled", "Pooled",
+                 "Pooled", "Pooled",
+                 "Pooled", "Pooled"),
+  n          = c(NA_integer_, NA_integer_,   # [FILL] from paper Table
+                 NA_integer_, NA_integer_,
+                 NA_integer_, NA_integer_),
+  CV_pct     = c(4.5,  5.0,   # [APPROX — replace with exact table values]
+                 6.0,  5.5,
+                 9.0,  8.0),
+  Trait_mean_mm = c(130, 14,
+                    130, 14,
+                    130, 14),
+  Source     = c("Ackermann 2002",      "Plavcan & Cope 2001",
+                 "Ackermann 2002",      "Plavcan & Cope 2001",
+                 "Albrecht et al. 2003","Plavcan & Cope 2001"),
+  stringsAsFactors = FALSE
+)
+
+# Derive SD from CV: SD = (CV / 100) * trait_mean
+calib$SD_mm <- round((calib$CV_pct / 100) * calib$Trait_mean_mm, 2)
+
+knitr::kable(
+  calib[, c("Tier", "Species", "Trait", "Sex", "n", "CV_pct", "SD_mm", "Source")],
+  col.names = c("Tier", "Species", "Trait", "Sex", "n", "CV (%)", "SD (mm)", "Source"),
+  caption   = "Table 1. Empirical CV values from extant African apes used to calibrate simulation variance tiers. CV (%) values marked [APPROX] should be replaced with exact figures from the cited tables.",
+  align     = "llllrrrl"
+)
+```
+
+
 ```{r}
 # =============================================================================
 # FRAMEWORK - POPULATION-LEVEL SAMPLING PARAMETERS
@@ -178,16 +249,15 @@ print(discrete_2)
 # afarensis has a richer fossil record than africanus)
 #n_specimens <- c(Taxon_1 = 25, Taxon_2 = 30, Taxon_3 = 20)
 #n_specimens <- c(Taxon_1 = 34, Taxon_2 = 33, Taxon_3 = 33)
-n_specimens <- c(Taxon_1 = 100, Taxon_2 = 100, Taxon_3 = 100) #I feel like this is too big to see changes???
+n_specimens <- c(Taxon_1 = 100, Taxon_2 = 100, Taxon_3 = 100) 
 
-# Within-species SD for each continuous trait.
-# These control how much individuals scatter around the species mean.
-# Calibrate these against real CV (coefficient of variation) values
-# from extant primate species — typically 4-8% for linear cranial
-# measurements, slightly higher for dental breadths.
+# within_sd: derived from the empirical calibration table above.
+# Active tier = "Med" (pooled-sex Pan troglodytes assemblage).
+# To switch tiers, change active_tier to "Low" or "High".
+active_tier <- "Med"
 within_sd <- list(
-  cranial = 3.0,   # ~4.5% CV around a mean of ~130
-  dental  = 0.4    # ~5.7% CV around a mean of ~14
+  cranial = calib$SD_mm[calib$Tier == active_tier & calib$Trait == "Cranial breadth"],
+  dental  = calib$SD_mm[calib$Tier == active_tier & calib$Trait == "M1 MD length"]
 )
 
 # Sexual dimorphism as an offset added to male means.
@@ -594,7 +664,6 @@ cat(sprintf("  k-means (k=3):  ARI = %.4f\n", ari_km3))
 
 ```{r}
 library(mclust)    # adjustedRandIndex()
-library(irr)       # kappa2() for Cohen's Kappa
 library(caret)     # confusionMatrix()
 
 # ── after PAM clustering ──────────────────────────────────────────────────
