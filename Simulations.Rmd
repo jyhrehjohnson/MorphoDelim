@@ -146,14 +146,14 @@ print(discrete_2)
 # =============================================================================
 # Within-species SDs for the two simulated continuous traits are anchored to
 # published coefficients of variation (CVs) from extant African apes. Three
-# species define a low–medium–high variance gradient spanning the plausible
+# species define a low–medium–high variance spectrum spanning the plausible
 # range for Pliocene hominin assemblages:
 #
-#   Pan paniscus    — low dimorphism, low within-species variance [LOW bound]         reference: Ackermann (2002)
+#   Pan paniscus — low dimorphism, low within-species variance [LOW bound]                  reference: Ackermann (2002)
 #
-#   Pan troglodytes — moderate dimorphism, central estimate [MED bound]               reference: Ackermann (2002)
+#   Pan troglodytes — moderate dimorphism, central estimate [MED bound]                     reference: Ackermann (2002)
 #   
-#   Gorilla gorilla — high dimorphism, high within-species variance [HIGH bound]      reference: Ackermann (2002); Albrecht et al. (2002)
+#   Gorilla gorilla — high dimorphism, high within-species variance [HIGH bound]            reference: Ackermann (2002); Albrecht et al. (2002)
 #
 # Trait means used to convert CV -> SD:
 #   Cranial breadth (palate width proxy): ~130 mm
@@ -211,11 +211,11 @@ knitr::kable(
 # encounter in the fossil record.
 #
 # KEY PARAMETERS TO EXPLORE:
-#   n_specimens   : sample size per species (asymmetric = realistic)
-#   within_sp_sd  : within-species standard deviation for each trait
-#   dimorphism    : offset between male and female means
-#   sex_ratio     : proportion of males in the sample
-#   disc_prob     : probability of state "1" for discrete characters
+#   n_specimens: sample size per species (asymmetric = realistic)
+#   within_sp_sd: within-species standard deviation for each trait
+#   dimorphism: offset between male and female means
+#   sex_ratio: proportion of males in the sample
+#   disc_prob: probability of state "1" for discrete characters
 #
 # The basic model for continuous traits is a mixture of two normal
 # (male and female sub populations) centered on the evolved species mean,
@@ -332,13 +332,13 @@ sample_species <- function(taxon_name, n, sp_means_cont, sp_states_disc,
   # discrete characters perfectly diagnostic (unrealistic).
 
   p_high <- 0.85
-  p_low  <- 0.15
+  p_low <- 0.15
 
   p_sup_torus <- ifelse(sp_states_disc["sup_torus"] == "1", p_high, p_low)
-  p_sag_crest   <- ifelse(sp_states_disc["sag_crest"] == "1",   p_high, p_low)
+  p_sag_crest <- ifelse(sp_states_disc["sag_crest"] == "1",   p_high, p_low)
 
   sup_torus_vals <- rbinom(n, size = 1, prob = p_sup_torus)
-  sag_crest_vals   <- rbinom(n, size = 1, prob = p_sag_crest)
+  sag_crest_vals <- rbinom(n, size = 1, prob = p_sag_crest)
 
   data.frame(
     specimen_id = paste0(taxon_name, "_", sprintf("%03d", 1:n)),
@@ -474,29 +474,29 @@ print(head(blinded, 10))
 
 cat("\n--- Simulation Complete ---\n")
 cat("Objects available:\n")
-cat("  all_specimens : full dataset with true species and sex labels\n")
-cat("  blinded       : same data without truth labels (for classification)\n")
+cat("  all_specimens: full dataset with true species and sex labels\n")
+cat("  blinded: same data without truth labels (for classification)\n")
 cat("\nNext steps:\n")
-cat("  1. Apply unsupervised clustering (mclust, k-means) to 'blinded'\n")
-cat("  2. Apply supervised classification trained on subsets\n")
-cat("  3. Compare sequential vs. simultaneous delimitation protocols\n")
-cat("  4. Introduce missing data to simulate fossil fragmentation\n")
+cat("1. Apply unsupervised clustering (mclust, k-means) to 'blinded'\n")
+cat("2. Apply supervised classification trained on subsets\n")
+cat("3. Compare sequential vs. simultaneous delimitation protocols\n")
+cat("4. Introduce missing data to simulate fossil fragmentation\n")
 ```
 
 ```{r}
 # =============================================================================
-# --- 9. CLUSTER ANALYSIS -----------------------------------------------------
+# --- CLUSTER ANALYSIS -----------------------------------------------------
 # =============================================================================
 # STRATEGY: two complementary approaches that handle mixed data differently.
 #
-# 9A. PAM on Gower distance  (handles continuous + binary jointly)
+# PAM on Gower distance  (handles continuous + binary jointly)
 #     - Gower distance normalises continuous traits to [0,1] and uses
 #       simple matching distance for binary traits, then averages them.
 #     - PAM (Partitioning Around Medoids) is more robust to outliers than
 #       k-means and works on any distance matrix.
 #     - We fix k = 3 (we know the true number of taxa).
 #
-# 9B. Gaussian Mixture Model on continuous traits only (mclust)
+# Gaussian Mixture Model on continuous traits only (mclust)
 #     - Model-based clustering; selects covariance structure by BIC.
 #     - Applied to the two continuous traits only (GMM requires numeric input).
 #     - We constrain G = 3 to match the true taxon count.
@@ -509,9 +509,9 @@ cat("  4. Introduce missing data to simulate fossil fragmentation\n")
 
 cat("\n=== CLUSTER ANALYSIS ===\n")
 
-# ---- 9A. PAM + Gower distance (all 4 traits) --------------------------------
+# ---- PAM + Gower distance (all 4 traits) --------------------------------
 
-cat("\n--- 9A. PAM clustering on Gower distance (k = 3) ---\n")
+cat("\n--- PAM clustering on Gower distance (k = 3) ---\n")
 
 # Prepare feature matrix: discrete traits as factors so daisy() treats
 # them as categorical rather than numeric.
@@ -538,15 +538,15 @@ print(table(PAM_cluster = pam_clusters, True_taxon = true_labels))
 cat("\nAdjusted Rand Index (PAM):", round(ari_pam, 4), "\n")
 cat("  (1 = perfect recovery; 0 = chance; negative = worse than chance)\n")
 
-# ---- 9B. Gaussian Mixture Model (continuous traits only) --------------------
+# ---- Gaussian Mixture Model (continuous traits only) --------------------
 
-cat("\n--- 9B. Gaussian Mixture Model clustering (G = 3, continuous traits) ---\n")
+cat("\n--- Gaussian Mixture Model clustering (G = 3, continuous traits) ---\n")
 
-gmm_data   <- blinded[, c("cranial", "dental")]
+gmm_data <- blinded[, c("cranial", "dental")]
 gmm_result <- Mclust(gmm_data, G = 3)
 
 gmm_clusters <- gmm_result$classification
-ari_gmm      <- adjustedRandIndex(gmm_clusters, true_labels)
+ari_gmm <- adjustedRandIndex(gmm_clusters, true_labels)
 
 cat("GMM selected model:", gmm_result$modelName, "\n")
 cat("Contingency table (rows = GMM cluster, cols = true taxon):\n")
@@ -554,7 +554,7 @@ print(table(GMM_cluster = gmm_clusters, True_taxon = true_labels))
 cat("\nAdjusted Rand Index (GMM):", round(ari_gmm, 4), "\n")
 cat("  (1 = perfect recovery; 0 = chance; negative = worse than chance)\n")
 
-# ---- 9C. Summary comparison -------------------------------------------------
+# ---- Summary comparison -------------------------------------------------
 
 cat("\n--- 9C. Recovery Summary ---\n")
 cat(sprintf("  %-40s ARI = %.4f\n", "PAM + Gower (all 4 traits):", ari_pam))
@@ -796,7 +796,7 @@ print(varImp(rf_fit))
 # The supervised classification section produces only console output (confusion matrices, accuracy, variable importance). 
 ```
 
-#MAKE DENDOGRAM
+
 ```{r PHASE 3: BLIND ANALYSIS - DELIMITATION PROTOCOLS}
 # =============================================================================
 # PHASE 3: BLIND ANALYSIS - SEQUENTIAL VS. SIMULTANEOUS DELIMITATION
@@ -841,16 +841,16 @@ cat("Step 1 contingency (k=2 on all specimens):\n")
 print(cluster_taxa)
 
 taxon1_cluster <- which.max(cluster_taxa[, "Taxon_1"])
-pool_cluster     <- setdiff(1:2, taxon1_cluster)
+pool_cluster  <- setdiff(1:2, taxon1_cluster)
 
-seq_labels           <- rep(NA, nrow(all_specimens))
+seq_labels <- rep(NA, nrow(all_specimens))
 seq_labels[pam2_step1$clustering == taxon1_cluster] <- "Taxon_1"
 
 # Sequential Step 2: split the remaining pool into 2 groups
-pool_idx     <- which(pam2_step1$clustering == pool_cluster)
-pool_data    <- cluster_data[pool_idx, ]
-gower_pool   <- daisy(pool_data, metric = "gower")
-pam2_step2   <- pam(gower_pool, k = 2, diss = TRUE)
+pool_idx <- which(pam2_step1$clustering == pool_cluster)
+pool_data <- cluster_data[pool_idx, ]
+gower_pool <- daisy(pool_data, metric = "gower")
+pam2_step2 <- pam(gower_pool, k = 2, diss = TRUE)
 
 # Assign step-2 labels by majority vote within the pool
 pool_taxa  <- table(pam2_step2$clustering, all_specimens$true_species[pool_idx])
@@ -864,7 +864,7 @@ seq_labels[pool_idx[pam2_step2$clustering == taxon2_cluster]] <- "Taxon_2"
 seq_labels[pool_idx[pam2_step2$clustering == taxon3_cluster]] <- "Taxon_3"
 
 # ARI for sequential protocol
-ari_sequential   <- adjustedRandIndex(seq_labels, all_specimens$true_species)
+ari_sequential <- adjustedRandIndex(seq_labels, all_specimens$true_species)
 
 # ARI for simultaneous protocol (PAM k=3 from Section 9)
 ari_simultaneous <- ari_pam
@@ -896,7 +896,7 @@ p_seq <- ggplot(all_specimens, aes(x = cranial, y = dental,
                       labels = c("Taxon_1", "Taxon_2", "Taxon_3")) +
   scale_shape_manual(values = c(Taxon_1 = 15, Taxon_2 = 16, Taxon_3 = 17),
                      labels = c("Taxon_1", "Taxon_2", "Taxon_3")) +
-  labs(title    = paste0("Sequential Delimitation  (ARI = ", round(ari_sequential, 3), ")"),
+  labs(title = paste0("Sequential Delimitation  (ARI = ", round(ari_sequential, 3), ")"),
        subtitle = "Step 1: isolate outgroup | Step 2: split sister pair",
        x = "Cranial (mm)", y = "Dental (mm)",
        colour = NULL, shape = NULL) +
