@@ -161,8 +161,9 @@ print(discrete_2)
 #
 # *** CV values below are approximate; replace with exact figures from the
 #     CV/SD columns of each paper's descriptive statistics table. ***
-#
-#   Plavcan JM, Cope DA (2001) [dental, catarrhines]
+
+# How to Update the Table with Real Numbers:
+# Open the cited paper, find the descriptive statistics table for the relevant species and measurement, and compute CV = (SD ÷ mean) × 100. Enter the exact CV and the sample size (n) into the ground dataframe. The within_sd values in the simulation will then update automatically because they are derived as SD = (CV / 100) × trait_mean. If the paper reports CV directly (some do), use it as given. If it reports only mean and SD, compute CV yourself.
 
 ground <- data.frame(
   Bound       = c("Low",  "Low",
@@ -801,6 +802,8 @@ print(varImp(rf_fit))
 # =============================================================================
 # PHASE 3: BLIND ANALYSIS - SEQUENTIAL VS. SIMULTANEOUS DELIMITATION
 # =============================================================================
+# **THIS SECTION PROVIDES THE ANSWER TO QUESTION 2.2 Does the order in which we assess fossil specimens influence species hypodigm construction?
+#
 # A core debate in hominin taxonomy: do you delimit taxa one at a time
 # (sequential) or all at once (simultaneous)?
 #
