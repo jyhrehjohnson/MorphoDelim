@@ -9,23 +9,12 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-#MorphoDelim is a morphology-based approach to species delimitation via simulation
+# Introduction
+This file holds the code for MorphoDelim (simulation method) proposed in AIM/CHAPTER 2. 
 
-```{r}
-# NOTES 
-#Change parameters as you go and then combine parameter to see how they interact with each other 
-#Then design "experiments" 
-
-#For dissertation what are realistic parameters; what is the level of variance for this trait; rate of evolution; phenotypic traits in humans
-
-#Prospectus: Need a framework, phylogeny, clear list of parameters I can control starting values for means, rate of evolution, number of generation (duration), number of taxa, number of traits, number of character states each discrete trait can take on, quantity of pop that express each trait, variance in each trait independently 
-
-#Analytical part: Simulations create blinded data set; preserve true taxa, analyze them as if I don't know; figure out which methods work; just do categorical continuous traits; 
-```
-
-```{r}
-library(phytools)
-library(ape)
+```{r LOAD PACKAGES}
+library(phytools)     #to build phylogeny
+library(ape)          #to build phylogeny
 library(cluster)      #adjustedRandIndex()
 library(mclust)
 library(factoextra)
@@ -41,13 +30,12 @@ library(irr)   #Kappa statistics
 ```
 
 
-```{r}
+```{r PHASE 1: BUILD - PHYLOGENY}
 # =============================================================================
-# FRAMEWORK - BUILD PHYLOGENY
+# PHASE 1: BUILD
 # =============================================================================
 # NOTES: 
-# Newick-format string. Colons separate taxon names from its branch length which is recorded in millions of years. Read the string from left to right. Paranthropus is the outgroup from afarensis and africanus. Afarensis and africanus form a clade at the internal branch 0.5; they are a sister pair at 1.0 & 1.0 terminal branches.
-#*PROSPECTUS CHANGE: Change real taxa names to Taxon 1,2,3*
+# Newick-format string. Colons separate taxon names from its branch length which is recorded in millions of years. Read the string from left to right. Taxon 1 (e.g. Paranthropus) is the outgroup from Taxon 2 (A. afarensis) and Taxon 3 (A. africanus). A. afarensis and A. africanus form a clade at the internal branch 0.5; they are a sister pair at 1.0 & 1.0 terminal branches.
 # =============================================================================
 #read.tree() from ape parses the Newick-format string into an ape phylo object
 hominin_tree <- read.tree(text = "(Taxon_1:2.0,(Taxon_2:1.0, Taxon_3 :1.0):1.0);") 
@@ -71,9 +59,9 @@ axisPhylo() #Adds a time axis in branch-length units from the Newick-format
 ```
 
 
-```{r}
+```{r PHASE 1: BUILD - TRAIT EVOLUTION (CONTINUOUS)}
 # =============================================================================
-# FRAMEWORK - SIMULATE CONTINUOUS TRAITS (Brownian Motion)
+# PHASE 1: BUILD - SIMULATE CONTINUOUS TRAITS (Brownian Motion)
 # =============================================================================
 # NOTES: 
 # Each trait is simulated independently along the phylogeny using fastBM().
@@ -108,9 +96,9 @@ print(round(continuous_2, 2))
 ```
 
 
-```{r}
+```{r PHASE 1: BUILD - TRAIT EVOLUTION (DISCRETE)}
 # =============================================================================
-# FRAMEWORK - SIMULATE DISCRETE TRAITS (Mk model via phytools::sim.Mk)
+# PHASE 1: BUILD - SIMULATE DISCRETE TRAITS (Mk model via phytools::sim.Mk)
 # =============================================================================
 # Two binary characters, loosely interpretable as:
 #   char_1: presence/absence of supraorbital torus
@@ -152,35 +140,32 @@ print(discrete_2)
 ```
 
 
-# Empirical Calibration
-
-```{r empirical-calibration}
+```{r PHASE 2: SAMPLE - GROUNDING THE SIMULATION}
 # =============================================================================
-# EMPIRICAL CALIBRATION — Extant Ape Variance Models
+# GROUNDING THE SIMULATION — Extant Ape Variance Models
 # =============================================================================
 # Within-species SDs for the two simulated continuous traits are anchored to
 # published coefficients of variation (CVs) from extant African apes. Three
 # species define a low–medium–high variance gradient spanning the plausible
 # range for Pliocene hominin assemblages:
 #
-#   Pan paniscus    — low dimorphism, low within-species variance  [LOW tier]
-#   Pan troglodytes — moderate dimorphism, central estimate        [MED tier]
-#   Gorilla gorilla — high dimorphism, high within-species variance [HIGH tier]
+#   Pan paniscus    — low dimorphism, low within-species variance [LOW bound]         reference: Ackermann (2002)
+#
+#   Pan troglodytes — moderate dimorphism, central estimate [MED bound]               reference: Ackermann (2002)
+#   
+#   Gorilla gorilla — high dimorphism, high within-species variance [HIGH bound]      reference: Ackermann (2002); Albrecht et al. (2002)
 #
 # Trait means used to convert CV -> SD:
 #   Cranial breadth (palate width proxy): ~130 mm
-#   M1 mesiodistal length:                ~ 14 mm
+#   M1 mesiodistal length: ~ 14 mm
 #
 # *** CV values below are approximate; replace with exact figures from the
 #     CV/SD columns of each paper's descriptive statistics table. ***
 #
-# Primary sources:
-#   Ackermann RR (2002) [cranial, Pan/Gorilla]
-#   Albrecht GH, Gelvin BR, Miller JMA (2003) [cranial, Gorilla]
 #   Plavcan JM, Cope DA (2001) [dental, catarrhines]
 
-calib <- data.frame(
-  Tier       = c("Low",  "Low",
+ground <- data.frame(
+  Bound       = c("Low",  "Low",
                  "Med",  "Med",
                  "High", "High"),
   Species    = c("Pan paniscus",    "Pan paniscus",
@@ -201,29 +186,26 @@ calib <- data.frame(
   Trait_mean_mm = c(130, 14,
                     130, 14,
                     130, 14),
-  Source     = c("Ackermann 2002",      "Plavcan & Cope 2001",
-                 "Ackermann 2002",      "Plavcan & Cope 2001",
-                 "Albrecht et al. 2003","Plavcan & Cope 2001"),
   stringsAsFactors = FALSE
 )
 
 # Derive SD from CV: SD = (CV / 100) * trait_mean
-calib$SD_mm <- round((calib$CV_pct / 100) * calib$Trait_mean_mm, 2)
+ground$SD_mm <- round((ground$CV_pct / 100) * ground$Trait_mean_mm, 2)
 
 knitr::kable(
-  calib[, c("Tier", "Species", "Trait", "Sex", "n", "CV_pct", "SD_mm", "Source")],
-  col.names = c("Tier", "Species", "Trait", "Sex", "n", "CV (%)", "SD (mm)", "Source"),
-  caption   = "Table 1. Empirical CV values from extant African apes used to calibrate simulation variance tiers. CV (%) values marked [APPROX] should be replaced with exact figures from the cited tables.",
+  ground[, c("Bound", "Species", "Trait", "Sex", "n", "CV_pct", "SD_mm", "Source")],
+  col.names = c("Bound", "Species", "Trait", "Sex", "n", "CV (%)", "SD (mm)", "Source"),
+  caption   = "Table 1. Empirical CV values from extant African apes used to ground simulation variance bounds. CV (%) values marked [APPROX] should be replaced with exact figures from the cited tables.",
   align     = "llllrrrl"
 )
 ```
 
 
-```{r}
+```{r PHASE 2: SAMPLE - SAMPLING PARAMETERS}
 # =============================================================================
-# FRAMEWORK - POPULATION-LEVEL SAMPLING PARAMETERS
+# PHASE 2: SAMPLE - POPULATION-LEVEL SAMPLING PARAMETERS
 # =============================================================================
-# The evolutionary simulation (sections 2-3) gives us species-level trait
+# The evolutionary simulation gives us species-level trait
 # values — effectively population means. Now we sample individual
 # "specimens" from each species to create the kind of data you actually
 # encounter in the fossil record.
@@ -248,15 +230,15 @@ knitr::kable(
 #n_specimens <- c(Taxon_1 = 34, Taxon_2 = 33, Taxon_3 = 33)
 n_specimens <- c(Taxon_1 = 100, Taxon_2 = 100, Taxon_3 = 100) 
 
-# within_sd: derived from the empirical calibration table above.
-# Active tier = "Med" (pooled-sex Pan troglodytes assemblage).
-# To switch tiers, change active_tier to "Low" or "High".
-active_tier <- "Med"
+# within_sd: derived from the grounding table above.
+# Active bound = "Med" (pooled-sex Pan troglodytes assemblage).
+# To switch bounds, change active_bound to "Low" or "High".
+active_bound <- "Med"
 within_sd <- list(
-  cranial = calib$SD_mm[calib$Tier == active_tier &
-                         calib$Trait == "Cranial breadth"][1],
-  dental  = calib$SD_mm[calib$Tier == active_tier &
-                         calib$Trait == "M1 MD length"][1]
+  cranial = ground$SD_mm[ground$Bound == active_bound &
+                         ground$Trait == "Cranial breadth"][1],
+  dental  = ground$SD_mm[ground$Bound == active_bound &
+                         ground$Trait == "M1 MD length"][1]
 )
 
 # Safety check — will catch the bug immediately if it occurs
@@ -291,9 +273,9 @@ cat("Within-species SD (dental):", within_sd$dental, "\n")
 ```
 
 
-```{r}
+```{r PHASE 2: SAMPLE - SAMPLING INDIVIDUAL SPECIMENS}
 # =============================================================================
-# FRAMEWORK - SAMPLE INDIVIDUAL SPECIMENS
+# PHASE 2: SAMPLE - SAMPLE INDIVIDUAL SPECIMENS
 # =============================================================================
 # For each species, we:
 #   1. Assign each specimen a sex (binomial draw).
@@ -411,9 +393,9 @@ cat(nrow(all_specimens), "specimens x", ncol(all_specimens), "columns\n")
 ```
 
 
-```{r}
+```{r PHASE 2: SAMPLE - SUMMARY STATS}
 # =============================================================================
-# FRAMEWORK - SUMMARY STATISTICS BY SPECIES
+# PHASE 2: SAMPLE - SUMMARY STATISTICS BY SPECIES
 # =============================================================================
 cat("\n--- Within-Species Summary: Continuous Traits ---\n")
 for (taxon in hominin_tree$tip.label) {
@@ -432,9 +414,9 @@ for (taxon in hominin_tree$tip.label) {
 ```
 
 
-```{r}
+```{r PHASE 2: SAMPLE - VISUALIZATION}
 # =============================================================================
-# FRAMEWORK - VISUALIZATION: MORPHOSPACE WITH POPULATION CLOUDS
+# PHASE 2: SAMPLE - VISUALIZATION: MORPHOSPACE WITH POPULATION CLOUDS
 # =============================================================================
 # Plot specimens in the 2D continuous trait space. This is the view your
 # classification methods will be working with — can you recover the true
@@ -477,9 +459,9 @@ print(plot_true)
 ```
 
 
-```{r}
+```{r PHASE 3: BLIND ANALYSIS}
 # =============================================================================
-# FRAMEWORK - THE "BLINDED" DATASET FOR CLASSIFICATION & CLUSTERING
+# PHASE 3: BLIND ANALYSIS - THE "BLINDED" DATASET FOR CLASSIFICATION & CLUSTERING
 # =============================================================================
 # This is what you hand to your classification methods: the same data,
 # but without the true_species label. The whole point of the simulation
@@ -579,9 +561,9 @@ cat(sprintf("  %-40s ARI = %.4f\n", "PAM + Gower (all 4 traits):", ari_pam))
 cat(sprintf("  %-40s ARI = %.4f\n", "GMM (continuous traits only):", ari_gmm))
 ```
 
-```{r}
+```{r PHASE 2: SAMPLE - UNSUPERVISED CLUSTERING}
 # =============================================================================
-# ANALYSIS - UNSUPERVISED CLUSTERING: k-means + BIC-guided k selection 
+# PHASE 2: SAMPLE - UNSUPERVISED CLUSTERING: k-means + BIC-guided k selection 
 # =============================================================================
 # k-means requires numeric input only, so we use the two continuous traits.
 # We first run it with the known k=3 to compare directly against PAM/GMM,
@@ -670,7 +652,7 @@ cat("\nk-means ARI summary:\n")
 cat(sprintf("  k-means (k=3):  ARI = %.4f\n", ari_km3))
 ```
 
-```{r}
+```{r CONFUSION MATRIX}
 # ── after PAM clustering ──────────────────────────────────────────────────
 
 # Step 1: align cluster labels to true species by majority vote
@@ -704,9 +686,9 @@ cat("Overall Accuracy:", round(cm$overall["Accuracy"] * 100, 1), "%\n")
 ```
 
 
-```{r}
+```{r PHASE 2: SAMPLE SUPERVISED CLASSIFICATION}
 # =============================================================================
-# ANALYSIS - SUPERVISED CLASSIFICATION TRAINED ON SUBSETS
+# PHASE 2: SAMPLE - SUPERVISED CLASSIFICATION TRAINED ON SUBSETS
 # =============================================================================
 # NOTE: Supervised classifiers require known species labels for training.
 # They are included here as performance benchmarks and for understanding
@@ -815,9 +797,9 @@ print(varImp(rf_fit))
 ```
 
 #MAKE DENDOGRAM
-```{r}
+```{r PHASE 3: BLIND ANALYSIS - DELIMITATION PROTOCOLS}
 # =============================================================================
-# ANALYSIS - SEQUENTIAL VS. SIMULTANEOUS DELIMITATION
+# PHASE 3: BLIND ANALYSIS - SEQUENTIAL VS. SIMULTANEOUS DELIMITATION
 # =============================================================================
 # A core debate in hominin taxonomy: do you delimit taxa one at a time
 # (sequential) or all at once (simultaneous)?
@@ -833,7 +815,7 @@ print(varImp(rf_fit))
 #   One-shot PAM + Gower on k=3 (already done in Section 9A).
 #   Repeated here for direct ARI comparison.
 #
-# The key question: does sequential delimitation accumulate error?
+# The key question: Does sequential delimitation accumulate error?
 # Misassignments in Step 1 contaminate the Step 2 input, potentially
 # inflating or deflating the apparent distinctiveness of the sister pair.
 # MAKE DENDOGRAM
@@ -943,7 +925,7 @@ p_sim <- ggplot(all_specimens,
 
   caption = paste0(
       "sig2 = 100 (cranial)  |  sig2 = 10 (dental)  |  ",
-      "Tier = ", active_tier,
+      "Bound = ", active_bound,
       "  |  within_sd = ", within_sd$cranial, " mm (cranial), ",
       round(within_sd$dental, 2), " mm (dental)  |  ",
       "n = ", paste(n_specimens, collapse = "/"), " per taxon  |  ",
@@ -973,6 +955,7 @@ fig <- plot_true + p_seq + p_sim +
   )
 
 print(fig)
+
 # ============================================================
 # GRAPH MEANING - SEQUENTIAL VS. SIMULTANEOUS DELIMITATION
 # ============================================================
@@ -1141,6 +1124,7 @@ p_missing <- ggplot(miss_long, aes(x = p_miss * 100, y = ARI,
         legend.position = "bottom")
 
 print(p_missing)
+
 # ============================================================
 # GRAPH MEANING - ARI DEGRADATION CURVE
 # ============================================================
@@ -1156,7 +1140,7 @@ print(p_missing)
 
 ```{r}
 # =============================================================================
-# ANALYSIS - Final summary 
+# FINAL SUMMARY
 # =============================================================================
 
 cat("\n=== FULL ANALYSIS SUMMARY ===\n")
