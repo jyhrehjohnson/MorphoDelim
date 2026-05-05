@@ -26,7 +26,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(phytools)
 library(ape)
-library(cluster)
+library(cluster)      #adjustedRandIndex()
 library(mclust)
 library(factoextra)
 library(ggplot2)
@@ -34,9 +34,10 @@ library(dplyr)
 library(tidyr)
 library(patchwork)
 library(RColorBrewer)
-library(caret)         #Unified supervised classification framework
+library(caret)         #confusionMatrix()
 library(randomForest)  #Random forest classifier
 library(e1071)         #SVM and naive bayes
+library(irr)   #Kappa statistics
 ```
 
 
@@ -174,13 +175,9 @@ print(discrete_2)
 #     CV/SD columns of each paper's descriptive statistics table. ***
 #
 # Primary sources:
-#   Ackermann RR (2002) Patterns of covariation in the hominoid craniofacial
-#     skeleton. J Hum Evol 42:167-187.                  [cranial, Pan/Gorilla]
-#   Albrecht GH, Gelvin BR, Miller JMA (2003) The hierarchy of intraspecific
-#     craniometric variation in gorillas. In: Gorilla Biology, pp. 62-103.
-#                                                        [cranial, Gorilla]
-#   Plavcan JM, Cope DA (2001) Metric variation and species recognition in
-#     the fossil record. Evol Anthropol 10:204-222.      [dental, catarrhines]
+#   Ackermann RR (2002) [cranial, Pan/Gorilla]
+#   Albrecht GH, Gelvin BR, Miller JMA (2003) [cranial, Gorilla]
+#   Plavcan JM, Cope DA (2001) [dental, catarrhines]
 
 calib <- data.frame(
   Tier       = c("Low",  "Low",
@@ -256,9 +253,20 @@ n_specimens <- c(Taxon_1 = 100, Taxon_2 = 100, Taxon_3 = 100)
 # To switch tiers, change active_tier to "Low" or "High".
 active_tier <- "Med"
 within_sd <- list(
-  cranial = calib$SD_mm[calib$Tier == active_tier & calib$Trait == "Cranial breadth"],
-  dental  = calib$SD_mm[calib$Tier == active_tier & calib$Trait == "M1 MD length"]
+  cranial = calib$SD_mm[calib$Tier == active_tier &
+                         calib$Trait == "Cranial breadth"][1],
+  dental  = calib$SD_mm[calib$Tier == active_tier &
+                         calib$Trait == "M1 MD length"][1]
 )
+
+# Safety check — will catch the bug immediately if it occurs
+stopifnot(
+  !is.na(within_sd$cranial),
+  !is.na(within_sd$dental),
+  length(within_sd$cranial) == 1,
+  length(within_sd$dental)  == 1
+)
+cat("within_sd cranial:", within_sd$cranial, "mm  |  dental:", within_sd$dental, "mm\n")
 
 # Sexual dimorphism as an offset added to male means.
 # For australopiths, cranial dimorphism is moderate to high;
@@ -663,9 +671,6 @@ cat(sprintf("  k-means (k=3):  ARI = %.4f\n", ari_km3))
 ```
 
 ```{r}
-library(mclust)    # adjustedRandIndex()
-library(caret)     # confusionMatrix()
-
 # ── after PAM clustering ──────────────────────────────────────────────────
 
 # Step 1: align cluster labels to true species by majority vote
@@ -703,6 +708,12 @@ cat("Overall Accuracy:", round(cm$overall["Accuracy"] * 100, 1), "%\n")
 # =============================================================================
 # ANALYSIS - SUPERVISED CLASSIFICATION TRAINED ON SUBSETS
 # =============================================================================
+# NOTE: Supervised classifiers require known species labels for training.
+# They are included here as performance benchmarks and for understanding
+# trait informativeness (Random Forest variable importance), NOT as the
+# primary MorphoDelimit species delimitation method. In the real Aim 3
+# fossil application, only the unsupervised PAM + Gower protocol is used.
+# 
 # Here we treat the problem as it arises in real paleoanthropology:
 # you have a small "training" set of specimens whose identity you are
 # confident about, and a larger "test" set of ambiguous specimens.
@@ -929,6 +940,16 @@ p_sim <- ggplot(all_specimens,
   theme_bw(base_size = 11) +
   theme(plot.title = element_text(face = "bold"),
         legend.position = "bottom")
+
+  caption = paste0(
+      "sig2 = 100 (cranial)  |  sig2 = 10 (dental)  |  ",
+      "Tier = ", active_tier,
+      "  |  within_sd = ", within_sd$cranial, " mm (cranial), ",
+      round(within_sd$dental, 2), " mm (dental)  |  ",
+      "n = ", paste(n_specimens, collapse = "/"), " per taxon  |  ",
+      "Sequential ARI = ", round(ari_sequential, 3),
+      "  |  Simultaneous ARI = ", round(ari_simultaneous, 3)
+    )
 
 print(p_seq + p_sim + plot_annotation(
   title = "Sequential vs. Simultaneous Taxon Delimitation",

@@ -1,0 +1,348 @@
+---
+title: "Hominin Fossil Application"
+author: "Jyhreh Johnson"
+date: "2026-05-04"
+output: html_document
+---
+
+
+```{r}
+library(phytools)
+library(ape)
+library(cluster)      #adjustedRandIndex()
+library(mclust)
+library(factoextra)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(patchwork)
+library(RColorBrewer)
+library(caret)         #confusionMatrix()
+library(randomForest)  #Random forest classifier
+library(e1071)         #SVM and naive bayes
+library(irr)   #Kappa statistics
+```
+
+```{r}
+# =============================================================================
+# REAL DATA — IMPORT AUSTRALOPTITHECUS & PARANTHROPUS SPECIMEN MEASUREMENTS
+# =============================================================================
+# Expected CSV structure (one row per specimen):
+#   specimen_id   : museum catalog number, e.g. "KNM-WT-17000"
+#   taxon         : current taxonomic assignment, e.g. "P_aethiopicus"
+#                   Use NA for specimens of unknown or contested assignment
+#                   (e.g. MLP-3000). These will be treated as unknowns.
+#   cranial       : continuous cranial measurement (mm), e.g. ZYB
+#   dental        : continuous dental measurement (mm), e.g. M1 MD length
+#   sup_torus     : 0/1 binary — supraorbital torus presence
+#   sag_crest     : 0/1 binary — sagittal crest presence
+#   age_Ma        : estimated specimen age in Ma (for temporal variance test)
+#                   Use NA if age is unavailable
+#   region        : geographic region, e.g. "South_Africa" / "East_Africa"
+#   source        : "original" (measured by you) or "literature" (published)
+#   reference     : citation for literature-sourced measurements
+#
+# Add more continuous or discrete columns as your character list expands.
+# Column names must match exactly what the clustering code expects.
+
+all_specimens <- read.csv("paranthropus_specimens.csv",
+                           stringsAsFactors = FALSE,
+                           na.strings = c("", "NA", "?"))
+
+cat("=== PARANTHROPUS SPECIMEN DATASET ===\n")
+cat("Total specimens:", nrow(all_specimens), "\n")
+cat("\nSpecimens by taxon:\n")
+print(table(all_specimens$taxon, useNA = "always"))
+
+cat("\nMissing data rate by character:\n")
+trait_cols <- c("cranial", "dental", "sup_torus", "sag_crest")
+print(round(colMeans(is.na(all_specimens[, trait_cols])) * 100, 1))
+
+cat("\nSources:\n")
+print(table(all_specimens$source))
+```
+
+```{r}
+# =============================================================================
+# REAL DATA — DATA QUALITY CHECK AGAINST AIM 2 PERFORMANCE ENVELOPE
+# =============================================================================
+
+# Empirical within-species SD from the confirmed specimens
+cat("=== EMPIRICAL WITHIN-SPECIES VARIATION ===\n")
+confirmed <- all_specimens[!is.na(all_specimens$taxon), ]
+
+for (taxon in unique(confirmed$taxon)) {
+  sp  <- confirmed[confirmed$taxon == taxon, ]
+  n   <- nrow(sp)
+  cr_sd <- round(sd(sp$cranial, na.rm = TRUE), 2)
+  dt_sd <- round(sd(sp$dental,  na.rm = TRUE), 2)
+  cr_cv <- round(cr_sd / mean(sp$cranial, na.rm = TRUE) * 100, 1)
+  dt_cv <- round(dt_sd / mean(sp$dental,  na.rm = TRUE) * 100, 1)
+  cat(sprintf("\n  %-20s  n = %d\n", taxon, n))
+  cat(sprintf("    Cranial: SD = %.2f mm  CV = %.1f%%\n", cr_sd, cr_cv))
+  cat(sprintf("    Dental:  SD = %.2f mm  CV = %.1f%%\n", dt_sd, dt_cv))
+}
+
+# Check against Aim 2 simulation performance envelope
+# Aim 2 showed ARI >= 0.80 when within_sd <= 6.0 mm and n >= 20 per taxon
+cat("\n=== AIM 2 PERFORMANCE ENVELOPE CHECK ===\n")
+for (taxon in unique(confirmed$taxon)) {
+  sp  <- confirmed[confirmed$taxon == taxon, ]
+  n   <- nrow(sp)
+  sd_c <- sd(sp$cranial, na.rm = TRUE)
+  miss <- mean(is.na(sp[, trait_cols])) * 100
+
+  status_n    <- ifelse(n >= 20,   "OK", "BELOW MINIMUM (< 20)")
+  status_sd   <- ifelse(sd_c <= 9, "OK", "ABOVE UPPER BOUND (> 9 mm)")
+  status_miss <- ifelse(miss <= 40, "OK", "EXCEEDS TOLERANCE (> 40%)")
+
+  cat(sprintf("  %-20s  n=%d [%s]  SD=%.1fmm [%s]  miss=%.0f%% [%s]\n",
+              taxon, n, status_n, sd_c, status_sd, miss, status_miss))
+}
+```
+
+```{r}
+# =============================================================================
+# REAL DATA — PREPARE BLINDED DATASET
+# =============================================================================
+# All specimens enter the clustering together — confirmed and unknown alike.
+# The taxon column is retained separately for interpretation only.
+
+current_assignments <- all_specimens$taxon  # save for later
+blinded <- all_specimens[, trait_cols]       # clustering sees only morphology
+
+# Flag which specimens are unknown (MLP-3000 etc.)
+unknown_idx <- which(is.na(current_assignments))
+cat("Known specimens:", sum(!is.na(current_assignments)), "\n")
+cat("Unknown specimens:", length(unknown_idx), "\n")
+if (length(unknown_idx) > 0) {
+  cat("Unknown specimen IDs:\n")
+  print(all_specimens$specimen_id[unknown_idx])
+}
+```
+
+```{r}
+# =============================================================================
+# REAL DATA — EMPIRICAL k SELECTION (Q3.1)
+# =============================================================================
+
+gower_dist <- daisy(
+  data.frame(
+    cranial   = blinded$cranial,
+    dental    = blinded$dental,
+    sup_torus = factor(blinded$sup_torus),
+    sag_crest = factor(blinded$sag_crest)
+  ),
+  metric = "gower"
+)
+
+# Silhouette-based k selection
+cat("=== EMPIRICAL k SELECTION ===\n")
+sil_scores <- sapply(2:6, function(k) {
+  p <- pam(gower_dist, k = k, diss = TRUE)
+  mean(silhouette(p$clustering, gower_dist)[, 3])
+})
+names(sil_scores) <- paste0("k=", 2:6)
+print(round(sil_scores, 4))
+
+best_k <- which.max(sil_scores) + 1
+cat(sprintf("\nOptimal k by silhouette: %d\n", best_k))
+
+# BIC cross-check (continuous traits only)
+bic_result <- mclustBIC(blinded[, c("cranial", "dental")], G = 1:6)
+best_G     <- which.max(apply(bic_result, 1, max, na.rm = TRUE)) + 1
+cat(sprintf("Optimal G by BIC (GMM): %d\n", best_G))
+
+if (best_k == best_G) {
+  cat(sprintf("Both criteria agree: k = %d\n", best_k))
+} else {
+  cat(sprintf("Criteria disagree: silhouette = %d, BIC = %d. Inspect both.\n",
+              best_k, best_G))
+}
+
+# Run PAM at optimal k
+pam_result  <- pam(gower_dist, k = best_k, diss = TRUE)
+pam_clusters <- pam_result$clustering
+```
+
+```{r}
+# =============================================================================
+# REAL DATA — EVALUATE CLUSTERS THRESHOLDS
+# =============================================================================
+
+# Silhouette width at optimal k
+sil_opt <- silhouette(pam_clusters, gower_dist)
+avg_sil  <- mean(sil_opt[, 3])
+cat(sprintf("\nAverage silhouette width (k=%d): %.4f\n", best_k, avg_sil))
+cat(sprintf("Aim 1 threshold > 0.60: %s\n",
+            ifelse(avg_sil > 0.60, "MET", "NOT MET")))
+
+# Flag negative silhouette specimens (boundary/uncertain)
+neg_sil_idx <- which(sil_opt[, 3] < 0)
+if (length(neg_sil_idx) > 0) {
+  cat("\nSpecimens with negative silhouette (boundary specimens):\n")
+  print(all_specimens[neg_sil_idx, c("specimen_id", "taxon")])
+}
+
+# Mahalanobis D² for each cluster pair
+cont_data <- all_specimens[, c("cranial", "dental")]
+
+compute_D2 <- function(data, labels, g1, g2) {
+  x1 <- data[labels == g1, ]; x2 <- data[labels == g2, ]
+  n1 <- sum(!is.na(x1[,1])); n2 <- sum(!is.na(x2[,1]))
+  if (n1 < 5 || n2 < 5) return(NA_real_)  # too few for stable estimate
+  x1c <- x1[complete.cases(x1), ]; x2c <- x2[complete.cases(x2), ]
+  S  <- ((nrow(x1c)-1)*cov(x1c) + (nrow(x2c)-1)*cov(x2c)) /
+          (nrow(x1c) + nrow(x2c) - 2)
+  d  <- colMeans(x1c) - colMeans(x2c)
+  as.numeric(t(d) %*% solve(S) %*% d)
+}
+
+cat("\n=== MAHALANOBIS D² (Aim 1 threshold > 4.0) ===\n")
+cluster_pairs <- combn(1:best_k, 2)
+for (i in seq_len(ncol(cluster_pairs))) {
+  g1 <- cluster_pairs[1, i]; g2 <- cluster_pairs[2, i]
+  d2 <- compute_D2(cont_data, pam_clusters, g1, g2)
+  result <- ifelse(is.na(d2), "INSUFFICIENT n",
+             ifelse(d2 > 4.0, "DISTINCT",
+             ifelse(d2 > 2.5, "UNCERTAIN", "SYNONYMIZE")))
+  cat(sprintf("  Cluster %d vs %d:  D² = %s  [%s]\n",
+              g1, g2,
+              ifelse(is.na(d2), "NA", round(d2, 2)),
+              result))
+}
+
+# Classification accuracy via LOOCV LDA
+lda_cv   <- lda(factor(pam_clusters) ~ cranial + dental,
+                data = all_specimens, CV = TRUE)
+accuracy <- mean(lda_cv$class == factor(pam_clusters), na.rm = TRUE)
+cat(sprintf("\nLOOCV Classification Accuracy: %.1f%%\n", accuracy * 100))
+cat(sprintf("Aim 1 threshold > 80%%: %s\n",
+            ifelse(accuracy > 0.80, "MET", "NOT MET")))
+```
+
+```{r}
+# =============================================================================
+# REAL DATA — MLP-3000 ASSIGNMENT (Q3.2)
+# =============================================================================
+
+mlp_idx  <- which(all_specimens$specimen_id == "MLP-3000")
+if (length(mlp_idx) > 0) {
+  mlp_cluster <- pam_clusters[mlp_idx]
+  cat(sprintf("\n=== MLP-3000 ASSIGNMENT ===\n"))
+  cat(sprintf("  Assigned to cluster: %d\n", mlp_cluster))
+
+  # Map cluster to current taxonomy by majority vote
+  confirmed_only <- all_specimens[!is.na(current_assignments), ]
+  cluster_to_taxon <- sapply(1:best_k, function(k) {
+    members <- current_assignments[pam_clusters == k & !is.na(current_assignments)]
+    if (length(members) == 0) return("Unassigned")
+    names(which.max(table(members)))
+  })
+  cat(sprintf("  Cluster %d corresponds predominantly to: %s\n",
+              mlp_cluster, cluster_to_taxon[mlp_cluster]))
+
+  # Gower distance from MLP-3000 to each cluster medoid
+  cat("\n  Gower distance from MLP-3000 to each cluster medoid:\n")
+  gower_mat <- as.matrix(gower_dist)
+  for (k in 1:best_k) {
+    medoid_idx <- pam_result$medoids[k]
+    dist_to_medoid <- gower_mat[mlp_idx, medoid_idx]
+    cat(sprintf("    Cluster %d (%s): %.4f\n",
+                k, cluster_to_taxon[k], dist_to_medoid))
+  }
+
+  # Bootstrap stability: what % of replicates assign MLP-3000 to same cluster?
+  set.seed(42)
+  n_boot   <- 100
+  boot_assignments <- integer(n_boot)
+  for (b in 1:n_boot) {
+    boot_idx  <- c(sample(setdiff(1:nrow(all_specimens), mlp_idx),
+                          nrow(all_specimens) - 1, replace = TRUE),
+                   mlp_idx)
+    boot_data <- data.frame(
+      cranial   = all_specimens$cranial[boot_idx],
+      dental    = all_specimens$dental[boot_idx],
+      sup_torus = factor(all_specimens$sup_torus[boot_idx]),
+      sag_crest = factor(all_specimens$sag_crest[boot_idx])
+    )
+    boot_dist <- daisy(boot_data, metric = "gower")
+    boot_pam  <- pam(boot_dist, k = best_k, diss = TRUE)
+    # Find MLP-3000's position in the bootstrap sample (it's always last)
+    boot_assignments[b] <- boot_pam$clustering[length(boot_idx)]
+  }
+  stability <- max(table(boot_assignments)) / n_boot * 100
+  modal_cluster <- as.integer(names(which.max(table(boot_assignments))))
+  cat(sprintf("\n  Bootstrap stability (n=%d replicates): %.0f%% assigned to cluster %d\n",
+              n_boot, stability, modal_cluster))
+  cat(sprintf("  Assignment is %s (threshold >= 80%%)\n",
+              ifelse(stability >= 80, "STABLE", "UNSTABLE")))
+}
+```
+
+```{r}
+# =============================================================================
+# REAL DATA — TEMPORAL AND GEOGRAPHIC VARIANCE TESTS (Aim 1 Thresholds 4 & 5)
+# =============================================================================
+
+# Compute discriminant scores for regression
+lda_full <- lda(factor(pam_clusters) ~ cranial + dental, data = all_specimens)
+all_specimens$LD1 <- predict(lda_full)$x[, 1]
+
+# Temporal variance
+if (!all(is.na(all_specimens$age_Ma))) {
+  temp_mod <- lm(LD1 ~ age_Ma, data = all_specimens)
+  R2_temp  <- summary(temp_mod)$r.squared
+  cat(sprintf("\nTemporal variance (R²): %.1f%%\n", R2_temp * 100))
+  cat(sprintf("Aim 1 threshold < 30%%: %s\n",
+              ifelse(R2_temp < 0.30, "MET — not a chronospecies artifact",
+              ifelse(R2_temp < 0.50, "CAUTION — moderate temporal signal",
+                                     "NOT MET — possible chronospecies artifact"))))
+} else {
+  cat("\nTemporal variance: age data not available for this sample.\n")
+}
+
+# Geographic variance
+if (!all(is.na(all_specimens$region))) {
+  geo_mod <- lm(LD1 ~ region, data = all_specimens)
+  R2_geo  <- summary(geo_mod)$r.squared
+  cat(sprintf("\nGeographic variance (R²): %.1f%%\n", R2_geo * 100))
+  cat(sprintf("Aim 1 threshold > 15%%: %s\n",
+              ifelse(R2_geo > 0.30, "MET — beyond geographic variant threshold",
+              ifelse(R2_geo > 0.15, "CAUTION — moderate geographic signal",
+                                    "NOT MET — possible geographic variant"))))
+} else {
+  cat("\nGeographic variance: region data not available for this sample.\n")
+}
+```
+
+```{r}
+# =============================================================================
+# REAL DATA — TAXONOMIC DECISION SUMMARY (Aim 1 Decision Framework)
+# =============================================================================
+
+cat("\n============================================================\n")
+cat("  PARANTHROPUS TAXONOMIC DECISION SUMMARY\n")
+cat("============================================================\n")
+cat(sprintf("  Optimal k (silhouette):       %d\n", best_k))
+cat(sprintf("  Optimal G (BIC, GMM):         %d\n", best_G))
+cat(sprintf("  Average silhouette width:     %.4f  (threshold > 0.60)\n", avg_sil))
+cat(sprintf("  LOOCV classification accuracy: %.1f%%  (threshold > 80%%)\n",
+            accuracy * 100))
+cat("\n  Mahalanobis D² by cluster pair:\n")
+for (i in seq_len(ncol(cluster_pairs))) {
+  g1 <- cluster_pairs[1, i]; g2 <- cluster_pairs[2, i]
+  d2 <- compute_D2(cont_data, pam_clusters, g1, g2)
+  cat(sprintf("    Cluster %d vs %d: D² = %s\n",
+              g1, g2,
+              ifelse(is.na(d2), "insufficient n", round(d2, 2))))
+}
+if (exists("R2_temp")) cat(sprintf("  Temporal variance R²:         %.1f%%  (threshold < 30%%)\n", R2_temp*100))
+if (exists("R2_geo"))  cat(sprintf("  Geographic variance R²:       %.1f%%  (threshold > 15%%)\n", R2_geo*100))
+if (length(mlp_idx) > 0) {
+  cat(sprintf("\n  MLP-3000 cluster assignment:  Cluster %d (%s)\n",
+              mlp_cluster, cluster_to_taxon[mlp_cluster]))
+  cat(sprintf("  Bootstrap stability:          %.0f%%  (threshold >= 80%%)\n", stability))
+}
+cat("============================================================\n")
+```
