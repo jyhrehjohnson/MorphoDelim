@@ -157,11 +157,11 @@ print(discrete_2)
 # species define a low–medium–high variance spectrum spanning the plausible
 # range for Pliocene hominin assemblages:
 #
-#   Pan paniscus — low dimorphism, low within-species variance [LOW bound] Ackermann (2002)
+# Pan paniscus — low dimorphism, low within-species variance [LOW bound] Ackermann (2002)
 #
-#   Pan troglodytes — moderate dimorphism, central estimate [MED bound] Ackermann (2002)
+# Pan troglodytes — moderate dimorphism, central estimate [MED bound] Ackermann (2002)
 #   
-#   Gorilla gorilla — high dimorphism, high within-species variance [HIGH bound] Ackermann (2002); Albrecht et al. (2002)
+# Gorilla gorilla — high dimorphism, high within-species variance [HIGH bound] Ackermann (2002); Albrecht et al. (2002)
 #
 # Trait means used to convert CV -> SD:
 #   Cranial breadth (palate width proxy): ~130 mm
